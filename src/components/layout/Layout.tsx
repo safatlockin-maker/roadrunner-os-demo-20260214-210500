@@ -4,9 +4,11 @@ import {
   BadgeCheck,
   BarChart3,
   Bell,
+  Bot,
   CalendarCheck2,
   Car,
   LayoutDashboard,
+  Megaphone,
   MessageSquareText,
   Rows3,
   TrendingUp,
@@ -25,15 +27,18 @@ const navItems: Array<{
   to: string;
   label: string;
   icon: ReactNode;
+  highlight?: boolean;
 }> = [
   { to: '/dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
+  { to: '/ai-assistant', icon: <Bot size={20} />, label: 'AI Assistant', highlight: true },
   { to: '/inbox', icon: <MessageSquareText size={20} />, label: 'Inbox' },
+  { to: '/leads', icon: <Users size={20} />, label: 'Leads' },
   { to: '/opportunities', icon: <Rows3 size={20} />, label: 'Opportunities' },
   { to: '/appointments', icon: <CalendarCheck2 size={20} />, label: 'Appointments' },
+  { to: '/campaigns', icon: <Megaphone size={20} />, label: 'Campaigns', highlight: true },
   { to: '/automations', icon: <Workflow size={20} />, label: 'Automations' },
   { to: '/reputation', icon: <BadgeCheck size={20} />, label: 'Reputation' },
   { to: '/reports', icon: <BarChart3 size={20} />, label: 'Reports' },
-  { to: '/leads', icon: <Users size={20} />, label: 'Leads' },
   { to: '/pipeline', icon: <TrendingUp size={20} />, label: 'Pipeline' },
   { to: '/inventory', icon: <Car size={20} />, label: 'Inventory' },
 ];
@@ -62,7 +67,7 @@ export default function Layout({ children, variant = 'default', hideTopBar = fal
         
         <nav className="flex-1 overflow-y-auto p-4">
           {navItems.map((item) => (
-            <NavItem key={item.to} to={item.to} icon={item.icon} label={item.label} variant={variant} />
+            <NavItem key={item.to} to={item.to} icon={item.icon} label={item.label} variant={variant} highlight={item.highlight} />
           ))}
         </nav>
 
@@ -109,30 +114,37 @@ function NavItem({
   icon,
   label,
   variant,
+  highlight,
 }: {
   to: string;
   icon: ReactNode;
   label: string;
   variant: 'default' | 'command-center';
+  highlight?: boolean;
 }) {
   return (
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-4 py-3 rounded-lg mb-2 transition ${getNavItemClasses(isActive, variant)}`
+        `flex items-center gap-3 px-4 py-3 rounded-lg mb-2 transition ${getNavItemClasses(isActive, variant, highlight)}`
       }
     >
       {icon}
       <span className="font-medium">{label}</span>
+      {highlight && (
+        <span className="ml-auto rounded-full bg-[#2A4BA8] px-1.5 py-0.5 text-[9px] font-semibold uppercase text-[#9AB8FF]">
+          AI
+        </span>
+      )}
     </NavLink>
   );
 }
 
-function getNavItemClasses(isActive: boolean, variant: 'default' | 'command-center'): string {
+function getNavItemClasses(isActive: boolean, variant: 'default' | 'command-center', highlight?: boolean): string {
   if (variant === 'command-center') {
-    return isActive
-      ? 'bg-[#244785] text-[#ECF2FF] shadow-[inset_0_0_0_1px_rgba(93,132,197,0.7)]'
-      : 'text-[#A4B5D7] hover:bg-[#16264A] hover:text-[#ECF2FF]';
+    if (isActive) return 'bg-[#244785] text-[#ECF2FF] shadow-[inset_0_0_0_1px_rgba(93,132,197,0.7)]';
+    if (highlight) return 'text-[#9AB8FF] hover:bg-[#16264A] hover:text-[#ECF2FF] border border-[#1E3060]';
+    return 'text-[#A4B5D7] hover:bg-[#16264A] hover:text-[#ECF2FF]';
   }
 
   return isActive ? 'bg-red-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white';

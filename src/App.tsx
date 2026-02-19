@@ -12,6 +12,8 @@ import Appointments from './pages/Appointments';
 import Automations from './pages/Automations';
 import Reputation from './pages/Reputation';
 import Reports from './pages/Reports';
+import AIAssistant from './pages/AIAssistant';
+import Campaigns from './pages/Campaigns';
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -40,6 +42,8 @@ function App() {
           <Route path="/leads" element={<Leads />} />
           <Route path="/pipeline" element={<Pipeline />} />
           <Route path="/inventory" element={<Inventory />} />
+          <Route path="/ai-assistant" element={<AIAssistant />} />
+          <Route path="/campaigns" element={<Campaigns />} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-right" richColors />

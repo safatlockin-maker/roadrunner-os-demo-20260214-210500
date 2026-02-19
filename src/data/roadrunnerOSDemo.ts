@@ -1,10 +1,13 @@
 import type {
   AppointmentRecord,
   CallEvent,
+  ConversationContext,
   ConsentEvent,
   ConversationThread,
   FinanceApplicationRecord,
+  GuaranteeKpiSnapshot,
   LeadLifecycleRecord,
+  MigrationMapping,
   MessageEvent,
   OpportunityRecord,
   ReviewRequestRecord,
@@ -175,6 +178,14 @@ export const osConversationThreads: ConversationThread[] = [
     assigned_rep: 'Wayne Sales Desk',
     has_unread: true,
     last_message_at: isoMinutesAgo(19),
+    context: {
+      page_url: '/used-cars-wayne-mi/2020-honda-accord',
+      clicked_vehicle: '2020 Honda Accord Sport',
+      utm_source: 'google_ads',
+      utm_campaign: 'weekend-urgent-buyers',
+      session_source: 'webchat',
+      viewed_pages: ['/used-cars-wayne-mi', '/financing/index.htm', '/contact'],
+    },
   },
   {
     id: 'thread-2',
@@ -183,6 +194,14 @@ export const osConversationThreads: ConversationThread[] = [
     assigned_rep: 'Taylor Sales Desk',
     has_unread: false,
     last_message_at: isoHoursAgo(9),
+    context: {
+      page_url: '/cars-for-sale?make=Jeep',
+      clicked_vehicle: '2020 Jeep Grand Cherokee',
+      utm_source: 'facebook',
+      utm_campaign: 'trade-in-upgrade',
+      session_source: 'sms',
+      viewed_pages: ['/cars-for-sale', '/virtual-financing'],
+    },
   },
   {
     id: 'thread-3',
@@ -191,8 +210,22 @@ export const osConversationThreads: ConversationThread[] = [
     assigned_rep: 'Ali Almo',
     has_unread: true,
     last_message_at: isoHoursAgo(3),
+    context: {
+      page_url: '/virtual-financing',
+      clicked_vehicle: '2018 Chevrolet Malibu LT',
+      utm_source: 'organic',
+      utm_campaign: 'finance-form',
+      session_source: 'form',
+      viewed_pages: ['/virtual-financing', '/cars-for-sale?max_price=17000'],
+    },
   },
 ];
+
+export const osConversationContexts: Record<string, ConversationContext> = Object.fromEntries(
+  osConversationThreads
+    .filter((thread) => thread.context)
+    .map((thread) => [thread.id, thread.context as ConversationContext]),
+);
 
 export const osMessageEvents: MessageEvent[] = [
   {
@@ -467,5 +500,152 @@ export const osReviewRequests: ReviewRequestRecord[] = [
     status: 'suppressed',
     channel: 'sms',
     suppression_reason: 'Closed lost - no review request',
+  },
+];
+
+export const osMigrationMappings: MigrationMapping[] = [
+  {
+    id: 'map-1',
+    podium_contact_id: 'podium-98231',
+    roadrunner_lead_id: 'lead-os-1',
+    confidence: 0.96,
+    source: 'csv',
+    created_at: isoDaysAgo(7),
+  },
+  {
+    id: 'map-2',
+    podium_contact_id: 'podium-98154',
+    roadrunner_lead_id: 'lead-os-6',
+    confidence: 0.91,
+    source: 'webhook',
+    created_at: isoDaysAgo(5),
+  },
+];
+
+export const osGuaranteeBaselines: Record<GuaranteeKpiSnapshot['key'], number> = {
+  time_to_first_response: 14.2,
+  contact_rate: 52.1,
+  appointment_set_rate: 24.6,
+  show_rate: 57.2,
+  finance_completion: 48.4,
+};
+
+// ─── Incoming Reviews (for Reputation page AI Respond feature) ───────────────
+
+export interface IncomingReview {
+  id: string;
+  reviewer_name: string;
+  rating: number;
+  body: string;
+  source: 'Google' | 'Facebook';
+  received_at: string;
+  responded: boolean;
+  ai_response?: string;
+}
+
+export const osIncomingReviews: IncomingReview[] = [
+  {
+    id: 'review-in-1',
+    reviewer_name: 'Marcus T.',
+    rating: 5,
+    body: 'Ali was fantastic from start to finish. Got me into a 2021 F-150 at a payment I could actually afford. No pressure, no games. Will be back for my next truck.',
+    source: 'Google',
+    received_at: isoHoursAgo(6),
+    responded: false,
+  },
+  {
+    id: 'review-in-2',
+    reviewer_name: 'Patricia K.',
+    rating: 3,
+    body: 'The car itself is great but the whole process felt rushed and I waited over an hour in the finance office with no updates. Would have given 5 stars if the communication was better.',
+    source: 'Google',
+    received_at: isoHoursAgo(14),
+    responded: false,
+  },
+  {
+    id: 'review-in-3',
+    reviewer_name: 'Jose R.',
+    rating: 5,
+    body: 'Drove 45 minutes from Dearborn and it was 100% worth it. They had the exact Accord I saw online, price matched it, and got me financed same day. Highly recommend the Taylor location.',
+    source: 'Google',
+    received_at: isoDaysAgo(1),
+    responded: false,
+  },
+  {
+    id: 'review-in-4',
+    reviewer_name: 'Angela W.',
+    rating: 3,
+    body: 'Decent selection and the salesperson was friendly, but I felt like financing took way too long. Almost 3 hours total. The car is nice though.',
+    source: 'Facebook',
+    received_at: isoDaysAgo(2),
+    responded: false,
+  },
+  {
+    id: 'review-in-5',
+    reviewer_name: 'Derek M.',
+    rating: 5,
+    body: 'Best car buying experience I have ever had. They texted me back within minutes of my inquiry and had 3 options ready when I showed up. Closed same day. Ask for Ali!',
+    source: 'Google',
+    received_at: isoDaysAgo(3),
+    responded: true,
+    ai_response: 'Thank you so much Derek! We love hearing this — getting you back on the road same day is exactly what we aim for. Ali will be thrilled! See you next time at Road Runner.',
+  },
+];
+
+// ─── Campaign History (for Campaigns page Revenue Mining feature) ─────────────
+
+export interface CampaignRecord {
+  id: string;
+  name: string;
+  target_audience: string;
+  vehicle_spotlight: string;
+  goal: string;
+  message_preview: string;
+  sent_at: string;
+  recipient_count: number;
+  response_rate_percent: number;
+  test_drives_booked: number;
+  revenue_attributed: number;
+}
+
+export const osCampaignHistory: CampaignRecord[] = [
+  {
+    id: 'campaign-1',
+    name: 'January Cold Lead Revival',
+    target_audience: 'Cold leads 30+ days',
+    vehicle_spotlight: '2022 Honda CR-V EX-L',
+    goal: 'Test Drive',
+    message_preview: 'Hey [Name], still looking for a reliable SUV? We just got a 2022 CR-V in under $28k. Weekend slots open — reply YES to grab one.',
+    sent_at: isoDaysAgo(18),
+    recipient_count: 31,
+    response_rate_percent: 22.6,
+    test_drives_booked: 7,
+    revenue_attributed: 48500,
+  },
+  {
+    id: 'campaign-2',
+    name: 'Finance Rescue — December No-Shows',
+    target_audience: 'Finance incomplete',
+    vehicle_spotlight: '2021 Toyota Camry SE',
+    goal: 'Financing Special',
+    message_preview: 'Quick update [Name]: rates dropped this week. We can rerun your numbers and likely get your payment under $400/mo. Worth 10 minutes?',
+    sent_at: isoDaysAgo(32),
+    recipient_count: 18,
+    response_rate_percent: 33.3,
+    test_drives_booked: 4,
+    revenue_attributed: 31200,
+  },
+  {
+    id: 'campaign-3',
+    name: 'Black Friday Truck Blitz',
+    target_audience: 'All active leads',
+    vehicle_spotlight: '2022 Ford F-150 XLT',
+    goal: 'Price Drop Alert',
+    message_preview: 'ROAD RUNNER DEAL: 2022 F-150 just dropped $2,100 — now $31,900. First come, first served. Reply or call 734-722-9500.',
+    sent_at: isoDaysAgo(83),
+    recipient_count: 54,
+    response_rate_percent: 18.5,
+    test_drives_booked: 10,
+    revenue_attributed: 74000,
   },
 ];

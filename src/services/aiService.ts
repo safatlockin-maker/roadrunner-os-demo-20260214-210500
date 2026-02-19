@@ -29,7 +29,7 @@ export async function generateLeadResponses(
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     const vehicleContext = vehicleOfInterest
       ? `Interested in: ${vehicleOfInterest.year} ${vehicleOfInterest.make} ${vehicleOfInterest.model} ($${vehicleOfInterest.list_price.toLocaleString()})`
@@ -154,4 +154,288 @@ function getFallbackResponses(lead: Lead, vehicle?: Vehicle): AIResponse[] {
 
 export function isAIConfigured(): boolean {
   return !!import.meta.env.VITE_GEMINI_API_KEY;
+}
+
+// ─── ARIA: Inbox Reply Generator ──────────────────────────────────────────────
+
+export interface InboxReplyContext {
+  leadFirstName: string;
+  clickedVehicle?: string;
+  sessionSource?: string;
+  lastInboundMessage?: string;
+  location: string;
+}
+
+export async function generateInboxReply(ctx: InboxReplyContext): Promise<string> {
+  if (!genAI) {
+    return `Thanks ${ctx.leadFirstName}. I saw your inquiry${ctx.clickedVehicle ? ` on the ${ctx.clickedVehicle}` : ''}. I can hold two matching options at our ${ctx.location.toUpperCase()} location and get you approved quickly. Is 5:30 PM or 6:15 PM better today?`;
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const prompt = `You are a sales rep at Road Runner Auto Sales (Wayne & Taylor, MI).
+Customer: ${ctx.leadFirstName}
+Their last message: "${ctx.lastInboundMessage ?? 'Interested in a vehicle'}"
+Vehicle they viewed: ${ctx.clickedVehicle ?? 'not specified'}
+How they contacted us: ${ctx.sessionSource ?? 'web'}
+Location: ${ctx.location}
+
+Write a single warm, confident SMS reply under 160 characters. Include their first name, reference the vehicle if known, and end with a specific appointment time offer (two time options). No emojis. No hashtags. Sound like a real salesperson, not a bot.`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
+  } catch {
+    return `Thanks ${ctx.leadFirstName}! I'd love to get you into ${ctx.clickedVehicle ?? 'something great'}. Is 5:30 PM or 6:15 PM better for a test drive today?`;
+  }
+}
+
+// ─── ARIA: Lead Intent Classifier ────────────────────────────────────────────
+
+export type LeadIntentCategory = 'test_drive' | 'pricing' | 'trade_in' | 'financing' | 'general';
+
+export interface LeadIntentResult {
+  category: LeadIntentCategory;
+  label: string;
+  emoji: string;
+}
+
+export async function classifyLeadIntent(message: string): Promise<LeadIntentResult> {
+  const fallback = (category: LeadIntentCategory): LeadIntentResult => {
+    const map: Record<LeadIntentCategory, { label: string; emoji: string }> = {
+      test_drive: { label: 'Test Drive', emoji: '🚗' },
+      pricing: { label: 'Pricing', emoji: '💰' },
+      trade_in: { label: 'Trade-In', emoji: '🔄' },
+      financing: { label: 'Financing', emoji: '💳' },
+      general: { label: 'General', emoji: '💬' },
+    };
+    return { category, ...map[category] };
+  };
+
+  // Quick keyword classification (no API call needed for these signals)
+  const lower = message.toLowerCase();
+  if (/test.?drive|come in|appointment|visit|stop by|schedule/.test(lower)) return fallback('test_drive');
+  if (/trade.?in|trade in|my car|current vehicle|worth/.test(lower)) return fallback('trade_in');
+  if (/financ|loan|monthly|payment|credit|pre.?approv/.test(lower)) return fallback('financing');
+  if (/price|cost|how much|deal|discount|obo|negotiat/.test(lower)) return fallback('pricing');
+
+  if (!genAI) return fallback('general');
+
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const result = await model.generateContent(
+      `Classify this automotive customer message into exactly one category: test_drive, pricing, trade_in, financing, or general.\nMessage: "${message}"\nReply with only the category word, nothing else.`,
+    );
+    const raw = result.response.text().trim().toLowerCase() as LeadIntentCategory;
+    const valid: LeadIntentCategory[] = ['test_drive', 'pricing', 'trade_in', 'financing', 'general'];
+    return fallback(valid.includes(raw) ? raw : 'general');
+  } catch {
+    return fallback('general');
+  }
+}
+
+// ─── ARIA: AI Call Summary Generator ─────────────────────────────────────────
+
+export async function generateAICallSummary(
+  leadFirstName: string,
+  vehicle: string,
+  outcome: string,
+  durationSeconds: number,
+): Promise<string> {
+  if (!genAI) {
+    return `Called ${leadFirstName} regarding ${vehicle}. Call ${outcome} — ${Math.round(durationSeconds / 60)} min. Follow up with appointment confirmation.`;
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const prompt = `Write a realistic 1-2 sentence call summary for an automotive sales rep.
+Customer: ${leadFirstName}
+Vehicle discussed: ${vehicle}
+Call outcome: ${outcome}
+Call duration: ${Math.round(durationSeconds / 60)} minutes
+
+Sound like a real CRM note a salesperson would write. Be specific — mention something like payment comfort, trade-in discussion, or appointment confirmation. Under 60 words.`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
+  } catch {
+    return `Called ${leadFirstName} about the ${vehicle}. Call ${outcome} (${Math.round(durationSeconds / 60)} min). Notes saved — follow up action required.`;
+  }
+}
+
+// ─── ARIA: Review Response Generator ─────────────────────────────────────────
+
+export async function generateReviewResponse(
+  reviewText: string,
+  rating: number,
+  reviewerName: string,
+): Promise<string> {
+  if (!genAI) {
+    if (rating >= 4) {
+      return `Thank you so much ${reviewerName}! We're thrilled to hear about your experience at Road Runner Auto Sales. We look forward to seeing you again!`;
+    }
+    return `Hi ${reviewerName}, thank you for your honest feedback. We're sorry your experience wasn't perfect — please reach out to us directly at 734-722-9500 and we'd love to make it right.`;
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const prompt = `Write a professional response from the manager of Road Runner Auto Sales to this ${rating}-star Google review.
+Reviewer: ${reviewerName}
+Review: "${reviewText}"
+Rating: ${rating} out of 5 stars
+
+Rules:
+- Sound like a real dealership manager, not corporate
+- If 4-5 stars: thank them warmly and reinforce the positive
+- If 1-3 stars: acknowledge the issue, apologize sincerely, offer to resolve directly, give phone number 734-722-9500
+- Under 80 words
+- Do not be sycophantic or use the phrase "valued customer"`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
+  } catch {
+    return rating >= 4
+      ? `Thank you ${reviewerName}! That means a lot to the whole team. We hope to see you again at Road Runner!`
+      : `Hi ${reviewerName}, we're sorry to hear about your experience. Please call us at 734-722-9500 — we'd like to make this right.`;
+  }
+}
+
+// ─── ARIA: SMS Campaign Copy Generator ───────────────────────────────────────
+
+export interface CampaignCopyResult {
+  message: string;
+  charCount: number;
+  sendTimeSuggestion: string;
+}
+
+export async function generateCampaignCopy(
+  targetAudience: string,
+  vehicleSpotlight: string,
+  campaignGoal: string,
+): Promise<CampaignCopyResult> {
+  const fallback = (): CampaignCopyResult => ({
+    message: `Hey [First Name], Road Runner Auto Sales here. We have a ${vehicleSpotlight} that matches what you were looking for. Reply YES to grab a spot this week — limited availability.`,
+    charCount: 0,
+    sendTimeSuggestion: 'Tuesday–Thursday, 10am–12pm (highest open rates)',
+  });
+
+  if (!genAI) return fallback();
+
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const prompt = `Write an SMS campaign message for an automotive dealership.
+Target audience: ${targetAudience}
+Vehicle spotlight: ${vehicleSpotlight}
+Campaign goal: ${campaignGoal}
+Dealership: Road Runner Auto Sales (Wayne & Taylor, Michigan)
+
+Rules:
+- Use [First Name] as the personalization token
+- Maximum 155 characters (strict)
+- Sound conversational and urgent, not spammy
+- Include a clear action (reply YES, call us, visit this weekend)
+- No hashtags, no emojis, no all-caps words
+
+Reply with ONLY the message text, nothing else.`;
+
+    const result = await model.generateContent(prompt);
+    const message = result.response.text().trim().slice(0, 155);
+    return {
+      message,
+      charCount: message.length,
+      sendTimeSuggestion: 'Tuesday–Thursday, 10am–12pm (highest open rates)',
+    };
+  } catch {
+    return fallback();
+  }
+}
+
+// ─── ARIA: Trade-In Estimator ─────────────────────────────────────────────────
+
+export interface TradeInEstimate {
+  low: number;
+  high: number;
+  reasoning: string;
+}
+
+export async function generateTradeInEstimate(
+  year: number,
+  make: string,
+  model: string,
+  mileage: number,
+  condition: 'excellent' | 'good' | 'fair' | 'poor',
+): Promise<TradeInEstimate> {
+  const fallback = (): TradeInEstimate => ({
+    low: 4500,
+    high: 9500,
+    reasoning: 'Estimate based on Michigan market averages for this vehicle class and mileage range.',
+  });
+
+  if (!genAI) return fallback();
+
+  try {
+    const geminiModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const prompt = `Estimate the trade-in value range for this vehicle at a Michigan used car dealership.
+Vehicle: ${year} ${make} ${model}
+Mileage: ${mileage.toLocaleString()} miles
+Condition: ${condition}
+
+Provide a realistic dealer trade-in offer range (not retail value).
+Reply with JSON only in this exact format:
+{"low": 8500, "high": 11200, "reasoning": "One short sentence about key value factors"}`;
+
+    const result = await geminiModel.generateContent(prompt);
+    const text = result.response.text();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return fallback();
+    const parsed = JSON.parse(jsonMatch[0]) as TradeInEstimate;
+    return { low: Number(parsed.low), high: Number(parsed.high), reasoning: String(parsed.reasoning) };
+  } catch {
+    return fallback();
+  }
+}
+
+// ─── ARIA: AI Assistant Chat (Jerry equivalent) ───────────────────────────────
+
+export interface ARIAMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export async function chatWithARIA(
+  messages: ARIAMessage[],
+  inventorySummary: string,
+): Promise<string> {
+  const fallbackResponses = [
+    "I'd be happy to help you find the right vehicle! We have great options at both our Wayne and Taylor locations. What's most important to you — payment, features, or fuel economy?",
+    "Great question! We can get you pre-approved in minutes with no impact to your credit score. What's your target monthly payment?",
+    "We have that available! I'd suggest coming in for a test drive — I can hold it for 24 hours with no obligation. When works for you this week?",
+  ];
+
+  if (!genAI) {
+    return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+    const systemContext = `You are ARIA, the AI sales assistant for Road Runner Auto Sales.
+Locations: 31731 Michigan Ave, Wayne MI 48184 | 24560 Eureka Rd, Taylor MI 48180
+Phone: 734-722-9500
+Hours: Mon-Sat 9am-7pm, Sun Closed
+Current inventory snapshot: ${inventorySummary}
+Financing: In-house financing available, work with all credit types, same-day approval.
+Trade-ins: We accept all trade-ins, free appraisal.
+
+Your role: Help customers find vehicles, answer questions, and schedule test drives.
+Style: Warm, knowledgeable, specific. Always suggest a concrete next step. Under 3 sentences per response.
+Never make up specific prices unless given in inventory. Never promise things you can't confirm.`;
+
+    const conversationHistory = messages.map(m => `${m.role === 'user' ? 'Customer' : 'ARIA'}: ${m.content}`).join('\n');
+    const prompt = `${systemContext}\n\nConversation:\n${conversationHistory}\nARIA:`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
+  } catch {
+    return "I'm here to help! Tell me what you're looking for and I'll find the best match in our inventory.";
+  }
 }
