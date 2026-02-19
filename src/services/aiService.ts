@@ -6,7 +6,10 @@ import type { Vehicle } from '../types/inventory';
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
 if (!apiKey) {
-  console.warn('Gemini API key not found. Using fallback responses');
+  console.warn('❌ Gemini API key not found. Using fallback responses');
+  console.warn('import.meta.env.VITE_GEMINI_API_KEY =', import.meta.env.VITE_GEMINI_API_KEY);
+} else {
+  console.log('✅ Gemini API key loaded:', apiKey.slice(0, 20) + '...' + apiKey.slice(-4));
 }
 
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;

@@ -76,6 +76,8 @@ export interface ConversationThread {
   assigned_rep: string;
   has_unread: boolean;
   last_message_at: string;
+  context?: ConversationContext;
+  sla_state?: ChannelSlaState;
 }
 
 export interface MessageEvent {
@@ -176,6 +178,61 @@ export interface WorkflowRun {
   detail: string;
 }
 
+export interface ConversationContext {
+  page_url: string;
+  clicked_vehicle?: string;
+  utm_source?: string;
+  utm_campaign?: string;
+  session_source: 'webchat' | 'sms' | 'phone' | 'form';
+  viewed_pages?: string[];
+}
+
+export interface ChannelSlaState {
+  thread_id: string;
+  lead_id: string;
+  owner: string;
+  location: LocationCode;
+  first_response_due_at: string;
+  breached_at?: string;
+  minutes_open: number;
+  is_breached: boolean;
+  severity: 'none' | 'medium' | 'high' | 'critical';
+}
+
+export interface DealDecayRiskScore {
+  lead_id: string;
+  score: number;
+  drivers: string[];
+  next_best_action: string;
+}
+
+export interface MigrationMapping {
+  id: string;
+  podium_contact_id: string;
+  roadrunner_lead_id: string;
+  confidence: number;
+  source: 'csv' | 'webhook';
+  created_at: string;
+}
+
+export interface GuaranteeKpiSnapshot {
+  key:
+    | 'time_to_first_response'
+    | 'contact_rate'
+    | 'appointment_set_rate'
+    | 'show_rate'
+    | 'finance_completion';
+  label: string;
+  baseline: number;
+  current: number;
+  delta: number;
+  target_delta: number;
+  target_direction: 'up' | 'down';
+  status: 'met' | 'on_track' | 'at_risk';
+  unit: 'percent' | 'minutes';
+  note?: string;
+}
+
 export interface LeadIntentScore {
   lead_id: string;
   score: number;
@@ -256,6 +313,102 @@ export interface WorkflowExecutePayload {
   workflow_key: string;
   lead_id?: string;
   context?: Record<string, unknown>;
+}
+
+export interface ChatSessionStartPayload {
+  lead_id?: string;
+  phone?: string;
+  location?: LocationCode;
+  session_source: ConversationContext['session_source'];
+  page_url: string;
+  clicked_vehicle?: string;
+  utm_source?: string;
+  utm_campaign?: string;
+}
+
+export interface ChatSessionStartResult {
+  session_id: string;
+  thread_id: string;
+  created_at: string;
+}
+
+export interface ChatMessagePayload {
+  session_id: string;
+  direction: MessageDirection;
+  channel: 'sms' | 'webchat' | 'note';
+  body: string;
+  ai_assist_used?: boolean;
+}
+
+export interface ChatMessageResult {
+  stored: boolean;
+  event_id: string;
+  created_at: string;
+}
+
+export interface OutboundSmsPayload {
+  lead_id: string;
+  body: string;
+  template_key?: string;
+}
+
+export interface OutboundSmsResult {
+  queued: boolean;
+  event_id: string;
+  delivery_status: 'queued' | 'sent' | 'failed';
+}
+
+export interface OutboundReviewInvitePayload {
+  lead_id: string;
+  channel: 'sms';
+  review_link?: string;
+}
+
+export interface OutboundReviewInviteResult {
+  queued: boolean;
+  event_id: string;
+  review_request_id?: string;
+}
+
+export interface CallSummaryPayload {
+  lead_id: string;
+  summary: string;
+  outcome?: CallEvent['outcome'];
+  duration_seconds?: number;
+  follow_up_action?: string;
+}
+
+export interface CallSummaryResult {
+  stored: boolean;
+  event_id: string;
+}
+
+export interface PodiumImportRecord {
+  podium_contact_id: string;
+  first_name: string;
+  last_name: string;
+  phone?: string;
+  email?: string;
+  stage?: OpportunityStage;
+  last_message_at?: string;
+  location?: LocationCode;
+}
+
+export interface PodiumImportPayload {
+  source: 'csv' | 'webhook';
+  records: PodiumImportRecord[];
+}
+
+export interface PodiumImportResult {
+  imported: number;
+  duplicates: number;
+  mappings: MigrationMapping[];
+}
+
+export interface ParallelRunScorecardResult {
+  generated_at: string;
+  snapshots: GuaranteeKpiSnapshot[];
+  recommendation: string;
 }
 
 export interface ReputationRequestPayload {

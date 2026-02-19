@@ -8,7 +8,14 @@ import LeadDetailModal from '../components/dashboard/LeadDetailModal';
 import CommandUtilityBar from '../components/dashboard/command-center/CommandUtilityBar';
 import CommandCenterContent from '../components/dashboard/command-center/CommandCenterContent';
 import { demoLeads, demoInventory } from '../data/demoData';
-import { osAppointments, osFinanceApplications, osLeads, osOpportunities } from '../data/roadrunnerOSDemo';
+import {
+  osAppointments,
+  osConversationThreads,
+  osFinanceApplications,
+  osGuaranteeBaselines,
+  osLeads,
+  osOpportunities,
+} from '../data/roadrunnerOSDemo';
 import { calculateLeadScore } from '../services/aiService';
 import {
   buildCommandActions,
@@ -17,7 +24,12 @@ import {
   buildRevenueForecast,
 } from '../services/commandCenterDerivations';
 import { isConvexConfigured } from '../services/roadrunnerConvex';
-import { buildOperationalKpis } from '../services/roadrunnerOS';
+import {
+  buildChannelSlaStates,
+  buildDealDecayRiskScores,
+  buildGuaranteeSnapshots,
+  buildOperationalKpis,
+} from '../services/roadrunnerOS';
 import type { CommandAction } from '../types/commandCenter';
 import type { Lead } from '../types/lead';
 import type { Vehicle } from '../types/inventory';
@@ -69,6 +81,18 @@ export default function Dashboard() {
   const operationalKpis = useMemo(
     () => buildOperationalKpis(osLeads, osOpportunities, osAppointments, osFinanceApplications),
     [],
+  );
+  const channelSla = useMemo(
+    () => buildChannelSlaStates(osConversationThreads, osLeads).filter((state) => state.is_breached),
+    [],
+  );
+  const decayQueue = useMemo(
+    () => buildDealDecayRiskScores(osLeads, osOpportunities, osFinanceApplications).slice(0, 4),
+    [],
+  );
+  const guaranteeSnapshots = useMemo(
+    () => buildGuaranteeSnapshots(operationalKpis, osGuaranteeBaselines).slice(0, 3),
+    [operationalKpis],
   );
 
   const actionById = useMemo(() => new Map(actions.map((action) => [action.id, action])), [actions]);
@@ -194,6 +218,75 @@ export default function Dashboard() {
             />
             <KpiTile label="Avg days to close" value={`${operationalKpis.avg_days_to_close}`} helper="Closed-won average" />
           </div>
+        </section>
+
+        <section className="mt-4 grid gap-3 lg:grid-cols-3">
+          <article className="rounded-xl border border-[#274070] bg-[linear-gradient(180deg,#111F3F_0%,#0C1833_100%)] p-4">
+            <p className="text-xs uppercase tracking-[0.08em] text-[#8EA5D4]">SLA Breach Heatmap</p>
+            <h3 className="mt-1 text-lg font-semibold text-[#EAF0FF]">Threads Over 5-Minute Target</h3>
+            <div className="mt-3 space-y-2">
+              {channelSla.length === 0 ? (
+                <p className="rounded-lg border border-[#2B406F] bg-[#101B36] px-3 py-2 text-sm text-[#9EB2D8]">
+                  No active breaches.
+                </p>
+              ) : (
+                channelSla.slice(0, 5).map((state) => (
+                  <div key={state.thread_id} className="rounded-lg border border-[#2B406F] bg-[#101B36] px-3 py-2">
+                    <p className="text-sm font-semibold text-[#EAF0FF]">{state.owner}</p>
+                    <p className="text-xs text-[#9DB2DA]">
+                      {state.location.toUpperCase()} • {state.minutes_open}m open • {state.severity}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </article>
+
+          <article className="rounded-xl border border-[#274070] bg-[linear-gradient(180deg,#111F3F_0%,#0C1833_100%)] p-4">
+            <p className="text-xs uppercase tracking-[0.08em] text-[#8EA5D4]">Must-Do Queue</p>
+            <h3 className="mt-1 text-lg font-semibold text-[#EAF0FF]">Deal Decay Risk Priorities</h3>
+            <div className="mt-3 space-y-2">
+              {decayQueue.map((row) => (
+                <div key={row.lead_id} className="rounded-lg border border-[#2B406F] bg-[#101B36] px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-[#EAF0FF]">{row.lead_id}</p>
+                    <span className="text-xs font-semibold text-[#F5C8CD]">Risk {row.score}</span>
+                  </div>
+                  <p className="text-xs text-[#9DB2DA]">{row.next_best_action}</p>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="rounded-xl border border-[#274070] bg-[linear-gradient(180deg,#111F3F_0%,#0C1833_100%)] p-4">
+            <p className="text-xs uppercase tracking-[0.08em] text-[#8EA5D4]">Guarantee Readiness</p>
+            <h3 className="mt-1 text-lg font-semibold text-[#EAF0FF]">Parallel Run Snapshot</h3>
+            <div className="mt-3 space-y-2">
+              {guaranteeSnapshots.map((snapshot) => (
+                <div key={snapshot.key} className="rounded-lg border border-[#2B406F] bg-[#101B36] px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-[#EAF0FF]">{snapshot.label}</p>
+                    <span
+                      className={`text-xs font-semibold ${
+                        snapshot.status === 'met'
+                          ? 'text-[#BCEFD8]'
+                          : snapshot.status === 'on_track'
+                            ? 'text-[#C4D7FF]'
+                            : 'text-[#F3C9CE]'
+                      }`}
+                    >
+                      {snapshot.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#9DB2DA]">
+                    Baseline {snapshot.baseline}
+                    {snapshot.unit === 'percent' ? '%' : ' min'} • Current {snapshot.current}
+                    {snapshot.unit === 'percent' ? '%' : ' min'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </article>
         </section>
 
         <CommandCenterContent

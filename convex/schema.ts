@@ -36,6 +36,36 @@ export default defineSchema({
     createdAt: v.string(),
   }).index('by_lead', ['leadId']),
 
+  chatSessions: defineTable({
+    threadId: v.string(),
+    leadId: v.optional(v.id('leads')),
+    phone: v.optional(v.string()),
+    location: v.string(),
+    sessionSource: v.string(),
+    pageUrl: v.string(),
+    clickedVehicle: v.optional(v.string()),
+    utmSource: v.optional(v.string()),
+    utmCampaign: v.optional(v.string()),
+    status: v.string(),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index('by_thread', ['threadId'])
+    .index('by_lead', ['leadId']),
+
+  chatEvents: defineTable({
+    sessionId: v.id('chatSessions'),
+    threadId: v.string(),
+    leadId: v.optional(v.id('leads')),
+    direction: v.string(),
+    channel: v.string(),
+    body: v.string(),
+    aiAssistUsed: v.optional(v.boolean()),
+    createdAt: v.string(),
+  })
+    .index('by_session', ['sessionId'])
+    .index('by_thread', ['threadId']),
+
   callEvents: defineTable({
     leadId: v.id('leads'),
     direction: v.string(),
@@ -43,6 +73,26 @@ export default defineSchema({
     durationSeconds: v.number(),
     createdAt: v.string(),
   }).index('by_lead', ['leadId']),
+
+  outboundEvents: defineTable({
+    leadId: v.id('leads'),
+    channel: v.string(),
+    eventType: v.string(),
+    body: v.string(),
+    templateKey: v.optional(v.string()),
+    status: v.string(),
+    createdAt: v.string(),
+  })
+    .index('by_lead', ['leadId'])
+    .index('by_status', ['status']),
+
+  deliveryReceipts: defineTable({
+    outboundEventId: v.id('outboundEvents'),
+    providerMessageId: v.optional(v.string()),
+    status: v.string(),
+    deliveredAt: v.optional(v.string()),
+    createdAt: v.string(),
+  }).index('by_outbound', ['outboundEventId']),
 
   opportunities: defineTable({
     leadId: v.id('leads'),
@@ -102,4 +152,44 @@ export default defineSchema({
     detail: v.optional(v.string()),
     createdAt: v.string(),
   }).index('by_workflow', ['workflowKey']),
+
+  migrationMappings: defineTable({
+    podiumContactId: v.string(),
+    leadId: v.id('leads'),
+    confidence: v.number(),
+    source: v.string(),
+    createdAt: v.string(),
+  })
+    .index('by_podium', ['podiumContactId'])
+    .index('by_lead', ['leadId']),
+
+  migrationAuditEvents: defineTable({
+    source: v.string(),
+    imported: v.number(),
+    duplicates: v.number(),
+    detail: v.optional(v.string()),
+    createdAt: v.string(),
+  }).index('by_created', ['createdAt']),
+
+  guaranteeBaselines: defineTable({
+    key: v.string(),
+    baseline: v.number(),
+    unit: v.string(),
+    targetDelta: v.number(),
+    targetDirection: v.string(),
+    createdAt: v.string(),
+  }).index('by_key', ['key']),
+
+  guaranteeSnapshots: defineTable({
+    key: v.string(),
+    baseline: v.number(),
+    current: v.number(),
+    delta: v.number(),
+    targetDelta: v.number(),
+    status: v.string(),
+    unit: v.string(),
+    generatedAt: v.string(),
+  })
+    .index('by_key', ['key'])
+    .index('by_generated', ['generatedAt']),
 });

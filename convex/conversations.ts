@@ -57,6 +57,17 @@ export const ingestInboundCall = mutation({
       createdAt: args.received_at,
     });
 
+    if (args.outcome === 'missed') {
+      await ctx.db.insert('outboundEvents', {
+        leadId: lead._id,
+        channel: 'sms',
+        eventType: 'missed_call_text_back',
+        body: 'Sorry we missed your call. Reply here and we can help right away.',
+        status: 'queued',
+        createdAt: new Date().toISOString(),
+      });
+    }
+
     return {
       stored: true,
       missed_call_follow_up: args.outcome === 'missed',
