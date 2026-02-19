@@ -184,7 +184,8 @@ Write a single warm, confident SMS reply under 160 characters. Include their fir
 
     const result = await model.generateContent(prompt);
     return result.response.text().trim();
-  } catch {
+  } catch (err) {
+    console.error('[ARIA generateInboxReply error]', err);
     return `Thanks ${ctx.leadFirstName}! I'd love to get you into ${ctx.clickedVehicle ?? 'something great'}. Is 5:30 PM or 6:15 PM better for a test drive today?`;
   }
 }
@@ -228,7 +229,8 @@ export async function classifyLeadIntent(message: string): Promise<LeadIntentRes
     const raw = result.response.text().trim().toLowerCase() as LeadIntentCategory;
     const valid: LeadIntentCategory[] = ['test_drive', 'pricing', 'trade_in', 'financing', 'general'];
     return fallback(valid.includes(raw) ? raw : 'general');
-  } catch {
+  } catch (err) {
+    console.error('[ARIA classifyLeadIntent error]', err);
     return fallback('general');
   }
 }
@@ -257,7 +259,8 @@ Sound like a real CRM note a salesperson would write. Be specific — mention so
 
     const result = await model.generateContent(prompt);
     return result.response.text().trim();
-  } catch {
+  } catch (err) {
+    console.error('[ARIA generateAICallSummary error]', err);
     return `Called ${leadFirstName} about the ${vehicle}. Call ${outcome} (${Math.round(durationSeconds / 60)} min). Notes saved — follow up action required.`;
   }
 }
@@ -292,7 +295,8 @@ Rules:
 
     const result = await model.generateContent(prompt);
     return result.response.text().trim();
-  } catch {
+  } catch (err) {
+    console.error('[ARIA generateReviewResponse error]', err);
     return rating >= 4
       ? `Thank you ${reviewerName}! That means a lot to the whole team. We hope to see you again at Road Runner!`
       : `Hi ${reviewerName}, we're sorry to hear about your experience. Please call us at 734-722-9500 — we'd like to make this right.`;
@@ -344,7 +348,8 @@ Reply with ONLY the message text, nothing else.`;
       charCount: message.length,
       sendTimeSuggestion: 'Tuesday–Thursday, 10am–12pm (highest open rates)',
     };
-  } catch {
+  } catch (err) {
+    console.error('[ARIA generateCampaignCopy error]', err);
     return fallback();
   }
 }
@@ -389,7 +394,8 @@ Reply with JSON only in this exact format:
     if (!jsonMatch) return fallback();
     const parsed = JSON.parse(jsonMatch[0]) as TradeInEstimate;
     return { low: Number(parsed.low), high: Number(parsed.high), reasoning: String(parsed.reasoning) };
-  } catch {
+  } catch (err) {
+    console.error('[ARIA generateTradeInEstimate error]', err);
     return fallback();
   }
 }
@@ -405,37 +411,52 @@ export async function chatWithARIA(
   messages: ARIAMessage[],
   inventorySummary: string,
 ): Promise<string> {
-  const fallbackResponses = [
-    "I'd be happy to help you find the right vehicle! We have great options at both our Wayne and Taylor locations. What's most important to you — payment, features, or fuel economy?",
-    "Great question! We can get you pre-approved in minutes with no impact to your credit score. What's your target monthly payment?",
-    "We have that available! I'd suggest coming in for a test drive — I can hold it for 24 hours with no obligation. When works for you this week?",
-  ];
-
-  if (!genAI) {
-    return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
-  }
-
-  try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
-    const systemContext = `You are ARIA, the AI sales assistant for Road Runner Auto Sales.
+  const systemInstruction = `You are ARIA, the friendly AI sales assistant for Road Runner Auto Sales.
 Locations: 31731 Michigan Ave, Wayne MI 48184 | 24560 Eureka Rd, Taylor MI 48180
 Phone: 734-722-9500
 Hours: Mon-Sat 9am-7pm, Sun Closed
-Current inventory snapshot: ${inventorySummary}
-Financing: In-house financing available, work with all credit types, same-day approval.
-Trade-ins: We accept all trade-ins, free appraisal.
+Current inventory: ${inventorySummary}
+Financing: In-house financing, all credit types accepted, same-day approval.
+Trade-ins: We accept all trade-ins with a free appraisal.
 
-Your role: Help customers find vehicles, answer questions, and schedule test drives.
-Style: Warm, knowledgeable, specific. Always suggest a concrete next step. Under 3 sentences per response.
-Never make up specific prices unless given in inventory. Never promise things you can't confirm.`;
+Your role: Help customers find vehicles, answer questions, schedule test drives, estimate trade-ins.
+Style: Warm, conversational, specific. Keep responses concise (2-3 sentences max). Always end with a clear next step or question.
+If asked casual things like "hey" or "what can you do" — introduce yourself warmly and list 3-4 things you can help with.
+Never make up prices not in inventory. Never promise things outside your knowledge.`;
 
-    const conversationHistory = messages.map(m => `${m.role === 'user' ? 'Customer' : 'ARIA'}: ${m.content}`).join('\n');
-    const prompt = `${systemContext}\n\nConversation:\n${conversationHistory}\nARIA:`;
+  // Separate history from the latest user message
+  const history = messages.slice(0, -1);
+  const lastMessage = messages[messages.length - 1];
 
-    const result = await model.generateContent(prompt);
+  if (!lastMessage || lastMessage.role !== 'user') {
+    return "What can I help you find today?";
+  }
+
+  if (!genAI) {
+    // Context-aware fallbacks
+    const text = lastMessage.content.toLowerCase();
+    if (/hey|hi|hello|heyy/.test(text)) return "Hey! I'm ARIA, Road Runner's AI assistant. I can help you find a vehicle, check inventory, estimate your trade-in, or answer financing questions — what are you looking for?";
+    if (/what.*do|what.*can|idk|help/.test(text)) return "Great question! I can search our inventory by budget or type, give you a trade-in estimate, explain financing options, or book you a test drive. Where should we start?";
+    return "I'd love to help! Tell me what kind of vehicle you're looking for — budget, type, or any specific features — and I'll find the best match in our inventory.";
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.0-flash',
+      systemInstruction,
+    });
+
+    // Build proper chat history (all messages except the last user message)
+    const chatHistory = history.map((m) => ({
+      role: m.role === 'user' ? 'user' as const : 'model' as const,
+      parts: [{ text: m.content }],
+    }));
+
+    const chat = model.startChat({ history: chatHistory });
+    const result = await chat.sendMessage(lastMessage.content);
     return result.response.text().trim();
-  } catch {
-    return "I'm here to help! Tell me what you're looking for and I'll find the best match in our inventory.";
+  } catch (err) {
+    console.error('[ARIA chatWithARIA error]', err);
+    return "I hit a quick snag — try again in a moment and I'll get right back to you!";
   }
 }
